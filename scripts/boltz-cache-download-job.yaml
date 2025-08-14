@@ -1,0 +1,77 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: boltz-cache-download
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: downloader
+        image: ubuntu:22.04
+        command: ["/bin/bash","-lc"]
+        args:
+          - |
+            set -euo pipefail
+            BOLTZ_DIR=/data/.boltz
+            mkdir -p "$BOLTZ_DIR"
+            cd "$BOLTZ_DIR"
+
+            # Install tools if not present
+            if ! command -v wget >/dev/null 2>&1; then
+              apt-get update -y
+              apt-get install -y wget ca-certificates tar
+            fi
+
+            echo "📥 Download ccd.pkl"
+            if [[ ! -s ccd.pkl ]]; then
+              wget -nc https://huggingface.co/boltz-community/boltz-1/resolve/main/ccd.pkl
+            else
+              echo "  ↪ already exists, skip."
+            fi
+
+            echo "📥 Download mols.tar"
+            if [[ ! -s mols.tar && ! -f .mols_extracted ]]; then
+              wget -nc https://huggingface.co/boltz-community/boltz-2/resolve/main/mols.tar
+            else
+              echo "  ↪ archive present or already extracted, skip download."
+            fi
+
+            echo "📦 Extract mols.tar (once)"
+            if [[ ! -d mols && ! -f .mols_extracted ]]; then
+              tar --no-same-owner --no-same-permissions \
+                  -xf mols.tar \
+                  --checkpoint=2000 \
+                  --checkpoint-action=echo="…extracted %u files"
+              touch .mols_extracted
+            else
+              echo "  ↪ already extracted, skip."
+            fi
+
+            echo "📥 Download boltz2_conf.ckpt"
+            if [[ ! -s boltz2_conf.ckpt ]]; then
+              wget --tries=3 --timeout=10 https://model-gateway.boltz.bio/boltz2_conf.ckpt || \
+              wget -nc https://huggingface.co/boltz-community/boltz-2/resolve/main/boltz2_conf.ckpt
+            else
+              echo "  ↪ already exists, skip."
+            fi
+
+            echo "📥 Download boltz2_aff.ckpt"
+            if [[ ! -s boltz2_aff.ckpt ]]; then
+              wget --tries=3 --timeout=10 https://model-gateway.boltz.bio/boltz2_aff.ckpt || \
+              wget -nc https://huggingface.co/boltz-community/boltz-2/resolve/main/boltz2_aff.ckpt
+            else
+              echo "  ↪ already exists, skip."
+            fi
+
+            echo "✅ Done. Listing contents:"
+            ls -lah "$BOLTZ_DIR"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: boltz-fs-pvc

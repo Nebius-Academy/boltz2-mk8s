@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: boltz-runner
+spec:
+  completions: 16           # Total tasks (001..016)
+  parallelism: 16           # Run all tasks in parallel
+  completionMode: Indexed   # Indexing 0..15 available via annotation
+  template:
+    spec:
+      containers:
+      - name: boltz-runner
+        image: ghcr.io/dashabalashova/boltz-runner:latest
+        env:
+          - name: JOB_INDEX
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+        command: ["bash","-lc"]
+        args:
+          - |
+            set -e
+            idx=$(printf '%03d' $(( JOB_INDEX + 1 ))) # Format index with leading zeros
+            d="/data/yamls_${idx}"
+            echo "▶ Using directory: ${d}"
+            boltz predict "${d}" --cache /data/.boltz --use_msa_server --out_dir /data/results/
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+        - name: shm-volume
+          mountPath: /dev/shm
+      restartPolicy: Never
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: boltz-fs-pvc
+      - name: shm-volume
+        emptyDir:
+          medium: Memory
+      imagePullSecrets:
+      - name: ghcr-credentials
