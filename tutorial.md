@@ -219,7 +219,7 @@ nebius mk8s node-group create \
 ```
 
 **What this does:**
-- creates a **GPU node group** with exactly two nodes (`--fixed-node-count 2`)
+- creates a **GPU node group** with exactly two nodes (`--fixed-node-count 4`)
 - attaches the **shared filesystem** created earlier (`mount_tag: csi-storage`)
 - configures nodes using the **`CLOUD_INIT`** script
 - uses the **`gpu-l40s-d`** platform with:
