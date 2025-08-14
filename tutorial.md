@@ -207,11 +207,11 @@ EOF
 nebius mk8s node-group create \
   --name "$NODE_GROUP_NAME" \
   --parent-id "$NB_CLUSTER_ID" \
-  --fixed-node-count 2 \
+  --fixed-node-count 4 \
   --template-filesystems "[{\"attach_mode\": \"READ_WRITE\", \"mount_tag\": \"csi-storage\", \"existing_filesystem\": {\"id\": \"$NB_FS_ID\"}}]" \
   --template-cloud-init-user-data "$CLOUD_INIT" \
   --template-resources-platform "gpu-l40s-d" \
-  --template-resources-preset "2gpu-64vcpu-384gb" \
+  --template-resources-preset "4gpu-128vcpu-768gb" \
   --template-boot-disk-type network_ssd \
   --template-boot-disk-size-bytes 68719476736 \
   --template-network-interfaces "[{\"public_ip_address\": {}, \"subnet_id\": \"$NB_SUBNET_ID\"}]" \
@@ -223,9 +223,9 @@ nebius mk8s node-group create \
 - attaches the **shared filesystem** created earlier (`mount_tag: csi-storage`)
 - configures nodes using the **`CLOUD_INIT`** script
 - uses the **`gpu-l40s-d`** platform with:
-  - 2x **NVIDIA L40S** GPUs  
-  - 64 vCPUs  
-  - 384 GB RAM
+  - 4x **NVIDIA L40S** GPUs  
+  - 128 vCPUs  
+  - 768 GB RAM
 - preconfigures **CUDA 12** GPU drivers (`--template-gpu-settings-drivers-preset cuda12`)
 - boots from a **network SSD** with a **64 GiB** disk size
 
