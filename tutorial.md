@@ -207,11 +207,11 @@ EOF
 nebius mk8s node-group create \
   --name "$NODE_GROUP_NAME" \
   --parent-id "$NB_CLUSTER_ID" \
-  --fixed-node-count 4 \
+  --fixed-node-count 2 \
   --template-filesystems "[{\"attach_mode\": \"READ_WRITE\", \"mount_tag\": \"csi-storage\", \"existing_filesystem\": {\"id\": \"$NB_FS_ID\"}}]" \
   --template-cloud-init-user-data "$CLOUD_INIT" \
   --template-resources-platform "gpu-l40s-d" \
-  --template-resources-preset "4gpu-128vcpu-768gb" \
+  --template-resources-preset "2gpu-64vcpu-384gb" \
   --template-boot-disk-type network_ssd \
   --template-boot-disk-size-bytes 68719476736 \
   --template-network-interfaces "[{\"public_ip_address\": {}, \"subnet_id\": \"$NB_SUBNET_ID\"}]" \
@@ -219,15 +219,15 @@ nebius mk8s node-group create \
 ```
 
 **What this does:**
-- creates a **GPU node group** with exactly two nodes (`--fixed-node-count 4`)
+- creates a **GPU node group** with exactly two nodes (`--fixed-node-count 2`)
 - attaches the **shared filesystem** created earlier (`mount_tag: csi-storage`)
 - configures nodes using the **`CLOUD_INIT`** script
 - uses the **`gpu-l40s-d`** platform with:
-  - 4x **NVIDIA L40S** GPUs  
-  - 128 vCPUs  
-  - 768 GB RAM
+  - 2x **NVIDIA L40S** GPUs  
+  - 64 vCPUs  
+  - 384 GB RAM
+- boots from a **network SSD** with a **64 GiB** disk size (`--template-boot-disk-size-bytes 68719476736`), this disk stores the OS, Docker images, temporary files, and any data not placed in shared storage
 - preconfigures **CUDA 12** GPU drivers (`--template-gpu-settings-drivers-preset cuda12`)
-- boots from a **network SSD** with a **64 GiB** disk size
 
 ### Install the CSI driver
 
