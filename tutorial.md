@@ -10,6 +10,8 @@ The typical inference time is about **40–60 seconds per protein–ligand pair*
 
 ## 1. Prepare your environment
 
+In this section, you will install and configure all necessary command-line tools to manage Nebius AI Cloud resources and Kubernetes clusters from your local environment.
+
 ### Install the CLIs and tools
 
 In this guide, you will run commands in your terminal to create and manage **Nebius AI Cloud** resources.  
@@ -94,28 +96,51 @@ Run the following commands to verify that all required tools are installed corre
 
 ```bash
 kubectl version --client
+jq --version
 helm version
-nebius --version
+nebius version
 ```
 
 After that, save your project ID in the CLI configuration:
 
 1. Copy your **Project ID** from the [Project settings](https://console.nebius.com/settings/) page in the web console.
-2. Run the following command, replacing `<project_ID>` with your actual project ID:
+2. Run the following command, replacing `<PROJECT_ID>` with your actual project ID:
 ```bash
-nebius config set parent-id <project_ID>
+nebius config set parent-id <PROJECT_ID>
 ```
 
 > **Note:** In the [Project settings](https://console.nebius.com/settings/) page, you can also create new projects. Click the project name in the top navigation bar, select **Create project**, set a name and parameters, and save. Each project will have its own unique **Project ID**.
 
 ---
 
-## 2. Create a cluster and set up a PersistentVolumeClaim
+## 2. Build and push the Boltz Runner Image
 
-In Kubernetes, a **PersistentVolumeClaim** (PVC) is a request for persistent storage.  
-It allows pods to share and retain data independently of their lifecycle.
+In this section, you will package the Boltz Runner code into a Docker image, upload it to a Nebius Container Registry, and make it available for deployment in Kubernetes.
 
-In this tutorial, the PVC named `boltz-fs-pvc` serves as a shared filesystem for all **Boltz-2** jobs, storing both the **input data** (YAMLs, MSAs) and the **prediction results**.
+Run the following command from the project root to build the image defined in `docker/Dockerfile`:
+
+```bash
+sudo docker build -t boltz-runner -f docker/Dockerfile .
+```
+
+Set the **Region** from the [Project settings](https://console.nebius.com/settings/) page into `<REGION_ID>`. Then create a new registry, tag `boltz-runner` Docker image with the correct registry path, and push it.
+
+
+```bash
+export REGION_ID=<REGION_ID>
+export NB_REGISTRY_PATH=$(nebius registry create \
+  --name boltz-registry \
+  --format json | jq -r ".metadata.id" | cut -d- -f 2)
+docker tag boltz-runner:latest \
+  cr.$REGION_ID.nebius.cloud/$NB_REGISTRY_PATH/boltz-runner:latest
+docker push cr.$REGION_ID.nebius.cloud/$NB_REGISTRY_PATH/boltz-runner:latest
+```
+
+---
+
+## 3. Create a cluster and set up a PersistentVolumeClaim
+
+In this section, you will create a GPU-enabled Kubernetes cluster in Nebius and set up a shared network filesystem. A **PersistentVolumeClaim** (PVC) named `boltz-fs-pvc` will provide persistent storage for all **Boltz-2** jobs, allowing pods to share and retain both the input data (YAMLs, MSAs) and the prediction results across their lifecycle.
 
 ### Set up variables for cluster configuration
 
@@ -124,6 +149,7 @@ FS_NAME="boltz-fs"
 CLUSTER_NAME="boltz-cluster"
 NODE_GROUP_NAME="boltz-nodegroup"
 NODE_USERNAME="user"
+SA_NAME="boltz-sa"
 ```
 
 ### Get the default subnet ID
@@ -142,7 +168,7 @@ export NB_SUBNET_ID=$(nebius vpc subnet list --format json | jq -r '.items[0].me
 
 ```bash
 export NB_FS_ID=$(nebius compute filesystem create \
-  --name "$FS_NAME" \
+  --name $FS_NAME \
   --size-gibibytes 32 \
   --type network_ssd \
   --block-size-bytes 4096 \
@@ -153,8 +179,8 @@ export NB_FS_ID=$(nebius compute filesystem create \
 
 ```bash
 export NB_CLUSTER_ID=$(nebius mk8s cluster create \
-  --name "$CLUSTER_NAME" \
-  --control-plane-subnet-id "$NB_SUBNET_ID" \
+  --name $CLUSTER_NAME \
+  --control-plane-subnet-id $NB_SUBNET_ID \
   '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
   --format json | jq -r '.metadata.id')
 ```
@@ -164,7 +190,7 @@ export NB_CLUSTER_ID=$(nebius mk8s cluster create \
 This command downloads and configures the **kubeconfig** file so that `kubectl` can connect to your newly created cluster. The `--external` flag ensures that the public control plane endpoint is used, and `--force` overwrites any existing configuration for this cluster.
 
 ```bash
-nebius mk8s cluster get-credentials --id "$NB_CLUSTER_ID" --external --force
+nebius mk8s cluster get-credentials --id $NB_CLUSTER_ID --external --force
 ```
 
 ### Create a user with SSH access and auto-mount the shared filesystem
@@ -201,14 +227,30 @@ EOF
 - **`virtiofs`** — the filesystem type used for high-performance, low-latency sharing between the node and network storage
 - the `/etc/fstab` entry ensures that the filesystem is automatically re-mounted if the node restarts
 
+### Create a service account
+
+Create a service account for the node group and grant it editor permissions by adding it to the **Editor** IAM group.
+
+Copy **Editor Group ID** from the [IAM](https://console.nebius.com/iam/) page in the web console.
+
+```bash
+NB_SA_ID=$(nebius iam service-account create \
+  --name $SA_NAME --format json | jq -r '.metadata.id')
+
+nebius iam group-membership create \
+  --parent-id <EDITOR_GROUP_ID> \
+  --member-id $NB_SA_ID
+```
+
 ### Create a node group and add it to the cluster
 
 ```bash
 nebius mk8s node-group create \
-  --name "$NODE_GROUP_NAME" \
-  --parent-id "$NB_CLUSTER_ID" \
+  --name $NODE_GROUP_NAME \
+  --parent-id $NB_CLUSTER_ID \
   --fixed-node-count 2 \
   --template-filesystems "[{\"attach_mode\": \"READ_WRITE\", \"mount_tag\": \"csi-storage\", \"existing_filesystem\": {\"id\": \"$NB_FS_ID\"}}]" \
+  --template-service-account-id $NB_SA_ID \
   --template-cloud-init-user-data "$CLOUD_INIT" \
   --template-resources-platform "gpu-l40s-d" \
   --template-resources-preset "2gpu-64vcpu-384gb" \
@@ -273,9 +315,9 @@ kubectl get pvc
 
 ---
 
-## 3. Upload input data to the PVC
+## 4. Upload input data to the PVC
 
-All input files for **Boltz-2** are stored in the `data/` directory on your local machine. This directory contains **16 subdirectories** (`yamls_001` ... `yamls_016`) with prediction input YAML files, and one `msa/` directory with multiple sequence alignments:
+In this section, you will copy all local Boltz-2 input files (YAMLs and MSAs) into the shared PersistentVolumeClaim so they are accessible to all jobs in the cluster. All input files for Boltz-2 are stored in the `data/` directory on your local machine. This directory contains **16 subdirectories** (`yamls_001` ... `yamls_016`) with prediction input YAML files, and one `msa/` directory with multiple sequence alignments:
 
 ```
 data/
@@ -295,9 +337,9 @@ scripts/upload_data_to_pvc.sh
 
 ---
 
-## 4. Pre-pull the Boltz runner image and download the model cache
+## 5. Pre-pull the Boltz runner image and download the model cache
 
-This step:
+In this section, you will prepare all cluster nodes for running Boltz-2 by pre-pulling the Docker image and downloading the model cache into the shared PVC, ensuring faster job startup.
 
 1. Runs the **Boltz** image pre-pull DaemonSet on all nodes.
 2. Runs the **model cache download** job to populate the PVC.
@@ -305,14 +347,14 @@ This step:
 4. Deletes the temporary resources.
 
 ```bash
-kubectl apply -f scripts/boltz-pre-pulling-job.yaml & PID1=$!
-
+export BOLTZ_IMAGE="cr.$REGION_ID.nebius.cloud/$NB_REGISTRY_PATH/boltz-runner:latest"
+envsubst '${BOLTZ_IMAGE}' < scripts/boltz-pre-pulling-job.yaml | kubectl apply -f - & PID1=$!
 kubectl apply -f scripts/boltz-cache-download-job.yaml & PID2=$!
 
 wait $PID1
 kubectl rollout status daemonset/boltz-pre-pulling --timeout=30m \
 || { echo "❌ boltz-pre-pulling failed"; exit 1; }
-kubectl delete -f scripts/boltz-pre-pulling-job.yaml
+envsubst '${BOLTZ_IMAGE}' < scripts/boltz-pre-pulling-job.yaml | kubectl delete -f -
 
 wait $PID2
 kubectl wait --for=condition=complete job/boltz-cache-download --timeout=30m \
@@ -324,13 +366,14 @@ kubectl delete job boltz-cache-download
 
 ---
 
-## 5. Run batch predictions
+## 6. Run predictions
 
-The file `scripts/boltz-multi-job.yaml` defines a Kubernetes **indexed job** that runs **16 parallel Boltz prediction tasks** (`yamls_001`–`yamls_016`) on GPUs.  
-Each batch corresponds to one of the `yamls_XXX` directories, and Kubernetes automatically schedules them across the available GPU nodes. For each batch, a separate **pod** is created, which reads the input YAMLs from the PVC `boltz-fs-pvc` and writes the prediction results back to the same PVC.
+In this section, you will launch multiple GPU-powered Boltz-2 prediction jobs in parallel, each processing a separate batch of input YAMLs from the shared PVC and saving results back to it.
+
+The file `scripts/boltz-multi-job.yaml` defines a Kubernetes **indexed job** that runs **16 Boltz prediction tasks** (`yamls_001`–`yamls_016`) on GPUs. Each batch corresponds to one of the `yamls_XXX` directories, and Kubernetes automatically schedules them across the available GPU nodes. For each batch, a separate **pod** is created, which reads the input YAMLs from the PVC `boltz-fs-pvc` and writes the prediction results back to the same PVC.
 
 ```bash
-kubectl apply -f scripts/boltz-multi-job.yaml
+envsubst '${BOLTZ_IMAGE}' < scripts/boltz-multi-job.yaml | kubectl apply -f -
 ```
 
 To check the status of the batch prediction pods, run:
@@ -342,7 +385,9 @@ kubectl get pods
 
 ---
 
-## 6. Download results and delete nodes
+## 7. Download results and delete nodes
+
+In this section, you will wait for all Boltz-2 prediction jobs to finish, download the results from the shared PVC to your local machine, and then clean up the cluster by deleting the jobs and GPU nodes.
 
 The `scripts/download_results_from_pvc.sh` script:
 
@@ -363,10 +408,10 @@ echo "✅ $completed/16 pods completed."
 chmod +x scripts/download_results_from_pvc.sh
 scripts/download_results_from_pvc.sh
 
-kubectl delete job boltz-runner --ignore-not-found
+kubectl delete job boltz-runner --cascade=foreground
 export NB_NODE_GROUP_ID=$(nebius mk8s node-group get-by-name \
   --parent-id $NB_CLUSTER_ID \
-  --name "$NODE_GROUP_NAME" \
+  --name $NODE_GROUP_NAME \
   --format json | jq -r '.metadata.id')
 helm uninstall csi-mounted-fs-path
 nebius mk8s node-group delete --id $NB_NODE_GROUP_ID
@@ -374,13 +419,18 @@ nebius mk8s node-group delete --id $NB_NODE_GROUP_ID
 
 ---
 
-## 7. Clean up (optional)
+## 8. Clean up (optional)
+
+In this section, you will delete all Nebius and Kubernetes resources created during the tutorial, including the PVC, shared filesystem, cluster, service account, and container registry.
 
 Use the following commands to remove all remaining resources created in this guide.  
 > **Warning:** This will permanently delete the PVC, the shared filesystem, and the Kubernetes cluster. Before deleting resources, make sure all results are downloaded.
 
 ```bash
 kubectl delete pvc boltz-fs-pvc
-nebius compute filesystem delete --id "$NB_FS_ID"
-nebius mk8s cluster delete --id "$NB_CLUSTER_ID"
+nebius compute filesystem delete --id $NB_FS_ID
+nebius mk8s cluster delete --id $NB_CLUSTER_ID
+nebius iam service-account delete --id $NB_SA_ID
 ```
+
+To delete a registry in Nebius, first remove all container images inside it — otherwise deletion will fail. Go to [Nebius Container Registry](https://console.eu.nebius.com/registry). Open the registry you want to delete. Navigate to the **Docker container images** section and delete all images. Return to the registry view and delete the registry itself.
