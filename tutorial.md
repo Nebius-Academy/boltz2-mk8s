@@ -14,8 +14,7 @@ In this section, you will install and configure all necessary command-line tools
 
 ### Install the CLIs and tools
 
-In this guide, you will run commands in your terminal to create and manage **Nebius AI Cloud** resources.  
-First, install the required CLIs and tools using the copy-and-paste commands provided in the following steps.
+In this guide, you will run commands in your terminal to create and manage **Nebius AI Cloud** resources. First, install the required CLIs and tools using the copy-and-paste commands provided in the following steps.
 
 <details>
 <summary>Ubuntu (x86-64)</summary>
@@ -282,7 +281,7 @@ helm upgrade csi-mounted-fs-path ./csi-mounted-fs-path-0.1.3.tgz --install --set
 
 ### Create a PersistentVolumeClaim
 
-Create a `PersistentVolumeClaim` named `boltz-fs-pvc` that requests **32 GiB** of shared storage using the `csi-mounted-fs-path-sc` StorageClass. This PVC will be used as a shared filesystem between **Boltz-2** jobs.
+Create a PersistentVolumeClaim named `boltz-fs-pvc` that requests **32 GiB** of shared storage using the `csi-mounted-fs-path-sc` StorageClass. This PVC will be used as a shared filesystem between **Boltz-2** jobs.
 
 ```bash
 kubectl apply -f - <<EOF
@@ -341,8 +340,8 @@ scripts/upload_data_to_pvc.sh
 
 In this section, you will prepare all cluster nodes for running Boltz-2 by pre-pulling the Docker image and downloading the model cache into the shared PVC, ensuring faster job startup.
 
-1. Runs the **Boltz** image pre-pull DaemonSet on all nodes.
-2. Runs the **model cache download** job to populate the PVC.
+1. Runs the Boltz image pre-pull DaemonSet on all nodes.
+2. Runs the `boltz-cache-download` job to populate the PVC.
 3. Waits for both to complete.
 4. Deletes the temporary resources.
 
@@ -370,7 +369,7 @@ kubectl delete job boltz-cache-download
 
 In this section, you will launch multiple GPU-powered Boltz-2 prediction jobs in parallel, each processing a separate batch of input YAMLs from the shared PVC and saving results back to it.
 
-The file `scripts/boltz-multi-job.yaml` defines a Kubernetes **indexed job** that runs **16 Boltz prediction tasks** (`yamls_001`–`yamls_016`) on GPUs. Each batch corresponds to one of the `yamls_XXX` directories, and Kubernetes automatically schedules them across the available GPU nodes. For each batch, a separate **pod** is created, which reads the input YAMLs from the PVC `boltz-fs-pvc` and writes the prediction results back to the same PVC.
+The file `scripts/boltz-multi-job.yaml` defines a Kubernetes indexed job `boltz-runner` that runs **16 Boltz prediction tasks** (`yamls_001`–`yamls_016`) on GPUs. Each batch corresponds to one of the `yamls_XXX` directories, and Kubernetes automatically schedules them across the available GPU nodes. For each batch, a separate **pod** is created, which reads the input YAMLs from the PVC `boltz-fs-pvc` and writes the prediction results back to the same PVC.
 
 ```bash
 envsubst '${BOLTZ_IMAGE}' < scripts/boltz-multi-job.yaml | kubectl apply -f -
@@ -397,7 +396,7 @@ The `scripts/download_results_from_pvc.sh` script:
 4. Extracts it into a local directory.
 5. Deletes the temporary pod.
 
-Before downloading the results, the script waits for the **indexed Kubernetes job** `boltz-runner` to finish all 16 parallel tasks. The following command counts how many pods have completed successfully to confirm the run:
+Before downloading the results, the script waits for the indexed Kubernetes job `boltz-runner` to finish all 16 parallel tasks. The following command counts how many pods have completed successfully to confirm the run:
 
 ```bash
 echo "⏳ Waiting for boltz-runner job to complete..."
@@ -433,4 +432,4 @@ nebius mk8s cluster delete --id $NB_CLUSTER_ID
 nebius iam service-account delete --id $NB_SA_ID
 ```
 
-To delete a registry in Nebius, first remove all container images inside it — otherwise deletion will fail. Go to [Nebius Container Registry](https://console.eu.nebius.com/registry). Open the registry you want to delete. Navigate to the **Docker container images** section and delete all images. Return to the registry view and delete the registry itself.
+To delete a registry in Nebius, first remove all container images inside it — otherwise deletion will fail. Go to [Nebius Container Registry](https://console.eu.nebius.com/registry). Open the registry you want to delete. Navigate to the Docker container images section and delete all images. Return to the registry view and delete the registry itself.
