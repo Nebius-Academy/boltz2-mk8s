@@ -2,7 +2,7 @@
 
 [Boltz-2](https://github.com/jwohlwend/boltz) is an open-source biomolecular foundation model for predicting both complex 3D structures and binding affinities. It enables accurate and fast *in silico* screening for drug discovery, matching the accuracy of physics-based free-energy perturbation (FEP) methods while running up to 1000x faster.
 
-This guide explains how to set up a Managed Service for [Kubernetes](https://kubernetes.io/) cluster and shared filesystem in Nebius AI Cloud, and run Boltz-2 inference.
+This guide explains how to set up a Managed Service for a [Kubernetes](https://kubernetes.io/) cluster and a shared filesystem in Nebius AI Cloud, and run Boltz-2 inference.
 
 The typical inference time is about 40–60 seconds per protein–ligand pair, which means that with parallel execution on multiple GPUs, large batches of predictions can be completed in hours. For example, with 16 parallel GPU tasks, you can process around 1,000 pairs per hour.
 
@@ -10,9 +10,9 @@ The typical inference time is about 40–60 seconds per protein–ligand pair, w
 
 ## 1. Prepare your environment
 
-In this section, you will install and configure all necessary command-line tools to manage Nebius AI Cloud resources and Kubernetes cluster from your local environment.
+In this section, you will install and configure all the necessary command-line tools to manage Nebius AI Cloud resources and the Kubernetes cluster from your local environment.
 
-### Install the command line interfaces and tools
+### Install command line interfaces and tools
 
 Install the required command line interfaces (CLIs) and tools using the copy-and-paste commands provided in the following steps:
 
@@ -91,7 +91,7 @@ These commands will install the following tools:
 
 The last command, `nebius profile create`, opens the Nebius AI Cloud web console sign-in screen in your browser. Sign in to complete the initialization.
 
-Run the following commands to verify that all required CLIs and tools are installed correctly:
+Run the following commands to verify that all the required CLIs and tools are installed correctly:
 
 ```bash
 kubectl version --client
@@ -108,22 +108,21 @@ After that, save your project ID in the CLI configuration:
 nebius config set parent-id <PROJECT_ID>
 ```
 
-Note: In the [Project settings](https://console.nebius.com/settings/) page, you can also create new projects. Click the project name in the top navigation bar, select **Create project**, set a name and parameters, and save. Each project will have its own unique project ID.
+Note: in the [Project settings](https://console.nebius.com/settings/) page, you can also create new projects. Click the project name in the top navigation bar, select **Create project**, set a name and parameters, and save. Each project will have its own unique project ID.
 
 ---
 
-## 2. Build and push the Boltz Runner Image
+## 2. Build and push Boltz-2 runner image
 
-In this section, you will package the Boltz Runner code into a Docker image, upload it to a Nebius Container Registry, and make it available for deployment in Kubernetes.
+In this section, you will package a Boltz-2 runner code into a Docker image, upload it to the Container Registry, and make it available for deployment in Kubernetes.
 
-Run the following command from the project root to build the image defined in `docker/Dockerfile`:
+Run the following command from the project root to build the Docker image defined in `docker/Dockerfile`:
 
 ```bash
 sudo docker build -t boltz-runner -f docker/Dockerfile .
 ```
 
-Set the **Region** from the [Project settings](https://console.nebius.com/settings/) page into `<REGION_ID>`. Then create a new registry, tag `boltz-runner` Docker image with the correct registry path, and push it.
-
+Set the Region from the [Project settings](https://console.nebius.com/settings/) page into `<REGION_ID>`. Then create a new registry, tag `boltz-runner` Docker image with the correct registry path, and push it.
 
 ```bash
 export REGION_ID=<REGION_ID>
@@ -137,9 +136,9 @@ docker push cr.$REGION_ID.nebius.cloud/$NB_REGISTRY_PATH/boltz-runner:latest
 
 ---
 
-## 3. Create a cluster and set up a PersistentVolumeClaim
+## 3. Create cluster and set up PersistentVolumeClaim
 
-In this section, you will create a GPU-enabled Kubernetes cluster in Nebius and set up a shared network filesystem. A **PersistentVolumeClaim** (PVC) named `boltz-fs-pvc` will provide persistent storage for all **Boltz-2** jobs, allowing pods to share and retain both the input data (YAMLs, MSAs) and the prediction results across their lifecycle.
+In this section, you will create a GPU-enabled Kubernetes cluster and set up a shared network filesystem. A PersistentVolumeClaim (PVC) named `boltz-fs-pvc` will provide persistent storage for all Boltz-2 jobs, allowing pods to share and retain both the input data (YAMLs, MSAs) and the prediction results across their lifecycle.
 
 ### Set up variables for cluster configuration
 
@@ -147,11 +146,11 @@ In this section, you will create a GPU-enabled Kubernetes cluster in Nebius and 
 FS_NAME="boltz-fs"
 CLUSTER_NAME="boltz-cluster"
 NODE_GROUP_NAME="boltz-nodegroup"
-NODE_USERNAME="user"
 SA_NAME="boltz-sa"
+NODE_USERNAME="user"
 ```
 
-### Get the default subnet ID
+### Get default subnet ID
 
 The cluster’s control plane and nodes will use IP addresses from the default subnet.
 
@@ -159,7 +158,7 @@ The cluster’s control plane and nodes will use IP addresses from the default s
 export NB_SUBNET_ID=$(nebius vpc subnet list --format json | jq -r '.items[0].metadata.id')
 ```
 
-### Create a network SSD filesystem
+### Create network SSD filesystem
 
 **Parameters:**
 - `--size-gibibytes 32` — total storage capacity of the shared filesystem (**32 GiB**).
@@ -174,7 +173,7 @@ export NB_FS_ID=$(nebius compute filesystem create \
   --format json | jq -r ".metadata.id")
 ```
 
-### Create a cluster
+### Create cluster
 
 ```bash
 export NB_CLUSTER_ID=$(nebius mk8s cluster create \
@@ -184,25 +183,23 @@ export NB_CLUSTER_ID=$(nebius mk8s cluster create \
   --format json | jq -r '.metadata.id')
 ```
 
-### Generate a kubeconfig for kubectl
+### Generate kubeconfig for kubectl
 
-This command downloads and configures the **kubeconfig** file so that `kubectl` can connect to your newly created cluster. The `--external` flag ensures that the public control plane endpoint is used, and `--force` overwrites any existing configuration for this cluster.
+This command downloads and configures the kubeconfig file so that `kubectl` can connect to your newly created cluster. The `--external` flag ensures that the public control plane endpoint is used, and `--force` overwrites any existing configuration for this cluster.
 
 ```bash
 nebius mk8s cluster get-credentials --id $NB_CLUSTER_ID --external --force
 ```
 
-### Create a user with SSH access and auto-mount the shared filesystem
+### Create user with SSH access and auto-mount shared filesystem
 
-First, ensure you have an SSH public key.  
-If you already have `~/.ssh/id_ed25519.pub`, you can skip this step.  
-If not, generate one with:
+First, ensure you have an SSH public key. If you already have `~/.ssh/id_ed25519.pub`, you can skip this step. If not, generate one with:
 
 ```bash
 ssh-keygen -t ed25519 -C <your_email@example.com>
 ```
 
-Next, define the **cloud-init** configuration:
+Next, define the `cloud-init` configuration:
 
 ```bash
 SSH_KEY=$(cat ~/.ssh/id_ed25519.pub)
@@ -221,16 +218,16 @@ EOF
 )
 ```
 
-**Notes:**
-- **`csi-storage`** — the mount tag assigned when the Nebius filesystem was created, it specifies which shared filesystem to mount
-- **`virtiofs`** — the filesystem type used for high-performance, low-latency sharing between the node and network storage
-- the `/etc/fstab` entry ensures that the filesystem is automatically re-mounted if the node restarts
+Notes:
+- `csi-storage` — the mount tag assigned when the filesystem was created, it specifies which shared filesystem to mount;
+- `virtiofs` — the filesystem type used for high-performance, low-latency sharing between the node and network storage;
+- `/etc/fstab` entry ensures that the filesystem is automatically re-mounted if the node restarts.
 
-### Create a service account
+### Create service account
 
-Create a service account for the node group and grant it editor permissions by adding it to the **Editor** IAM group.
+Create a service account for the node group and grant it editor permissions by adding it to the Editor IAM group.
 
-Copy **Editor Group ID** from the [IAM](https://console.nebius.com/iam/) page in the web console.
+Copy Editor Group ID from the [IAM](https://console.nebius.com/iam/) page in the web console and replace `<EDITOR_GROUP_ID>` with it to add the service account to that group.
 
 ```bash
 NB_SA_ID=$(nebius iam service-account create \
@@ -241,7 +238,7 @@ nebius iam group-membership create \
   --member-id $NB_SA_ID
 ```
 
-### Create a node group and add it to the cluster
+### Create node group and add it to cluster
 
 ```bash
 nebius mk8s node-group create \
@@ -259,29 +256,29 @@ nebius mk8s node-group create \
   --template-gpu-settings-drivers-preset cuda12
 ```
 
-**What this does:**
-- creates a **GPU node group** with exactly two nodes (`--fixed-node-count 2`)
-- attaches the **shared filesystem** created earlier (`mount_tag: csi-storage`)
-- configures nodes using the **`CLOUD_INIT`** script
-- uses the **`gpu-l40s-d`** platform with:
-  - 2x **NVIDIA L40S** GPUs  
-  - 64 vCPUs  
-  - 384 GB RAM
-- boots from a **network SSD** with a **64 GiB** disk size (`--template-boot-disk-size-bytes 68719476736`), this disk stores the OS, Docker images, temporary files, and any data not placed in shared storage
-- preconfigures **CUDA 12** GPU drivers (`--template-gpu-settings-drivers-preset cuda12`)
+What it does:
+- creates the GPU node group with exactly two nodes (`--fixed-node-count 2`);
+- attaches the shared filesystem created earlier (`mount_tag: csi-storage`);
+- configures nodes using the `CLOUD_INIT` script;
+- uses the `gpu-l40s-d` platform with:
+  - 2x NVIDIA L40S GPUs;
+  - 64 vCPUs;
+  - 384 GB RAM;
+- boots from the network SSD with 64 GiB disk size (`--template-boot-disk-size-bytes 68719476736`), this disk stores the OS, Docker images, temporary files, and any data not placed in shared storage;
+- preconfigures CUDA 12 GPU drivers (`--template-gpu-settings-drivers-preset cuda12`).
 
-### Install the CSI driver
+### Install CSI driver
 
-This installs the `csi-mounted-fs-path` driver, which allows Kubernetes to mount the shared filesystem into pods.
+Install the `csi-mounted-fs-path` driver, which allows Kubernetes to mount the shared filesystem into pods.
 
 ```bash
 helm pull oci://cr.eu-north1.nebius.cloud/mk8s/helm/csi-mounted-fs-path --version 0.1.3
 helm upgrade csi-mounted-fs-path ./csi-mounted-fs-path-0.1.3.tgz --install --set dataDir="/mnt/data/csi-mounted-fs-path-data/"
 ```
 
-### Create a PersistentVolumeClaim
+### Create PersistentVolumeClaim
 
-Create a PersistentVolumeClaim named `boltz-fs-pvc` that requests **32 GiB** of shared storage using the `csi-mounted-fs-path-sc` StorageClass. This PVC will be used as a shared filesystem between **Boltz-2** jobs.
+Create a PersistentVolumeClaim named `boltz-fs-pvc` that requests 32 GiB of shared storage using the `csi-mounted-fs-path-sc` StorageClass. This PVC will be used as a shared filesystem between Boltz-2 jobs.
 
 ```bash
 kubectl apply -f - <<EOF
@@ -299,13 +296,13 @@ spec:
 EOF
 ```
 
-**Notes:**
-- `storageClassName: csi-mounted-fs-path-sc` — instructs Kubernetes to use the CSI driver installed in step 8 (`csi-mounted-fs-path`)
-- this driver is configured to mount the shared filesystem created earlier
+Notes:
+- `storageClassName: csi-mounted-fs-path-sc` instructs Kubernetes to use the CSI driver (`csi-mounted-fs-path`);
+- this driver is configured to mount the shared filesystem created earlier.
 
-### Check the status
+### Check status
 
-Run the following commands to verify that your cluster nodes and the PersistentVolumeClaim are ready:
+Run the following commands to verify that your cluster nodes and the PVC are ready:
 
 ```bash
 kubectl get nodes
@@ -314,9 +311,9 @@ kubectl get pvc
 
 ---
 
-## 4. Upload input data to the PVC
+## 4. Upload input data to shared filesystem
 
-In this section, you will copy all local Boltz-2 input files (YAMLs and MSAs) into the shared PersistentVolumeClaim so they are accessible to all jobs in the cluster. All input files for Boltz-2 are stored in the `data/` directory on your local machine. This directory contains **16 subdirectories** (`yamls_001` ... `yamls_016`) with prediction input YAML files, and one `msa/` directory with multiple sequence alignments:
+In this section, you will copy all local Boltz-2 input files (YAMLs and MSAs) into the shared filesystem so they are accessible to all jobs in the cluster. All input files for Boltz-2 are stored in the `data/` directory on your local machine. This directory contains 16 subdirectories (`yamls_001` ... `yamls_016`) with prediction input YAML files, and one `msa/` directory with a multiple sequence alignment:
 
 ```
 data/
@@ -336,11 +333,13 @@ scripts/upload_data_to_pvc.sh
 
 ---
 
-## 5. Pre-pull the Boltz runner image and download the model cache
+## 5. Pre-pull Boltz-2 runner image and download model cache
 
-In this section, you will prepare all cluster nodes for running Boltz-2 by pre-pulling the Docker image and downloading the model cache into the shared PVC, ensuring faster job startup.
+In this section, you will prepare all cluster nodes for running Boltz-2 by pre-pulling the Docker image and downloading the model cache into the shared filesystem, ensuring faster job startup.
 
-1. Runs the Boltz image pre-pull DaemonSet on all nodes.
+The code:
+
+1. Runs the Boltz-2 image pre-pull DaemonSet on all nodes.
 2. Runs the `boltz-cache-download` job to populate the PVC.
 3. Waits for both to complete.
 4. Deletes the temporary resources.
@@ -361,15 +360,15 @@ kubectl wait --for=condition=complete job/boltz-cache-download --timeout=30m \
 kubectl delete job boltz-cache-download
 ```
 
-> **Note:** `PID1` and `PID2` store the process IDs of the background tasks (`boltz-pre-pulling-job.yaml` and `boltz-cache-download-job.yaml`). This allows them to run in parallel and ensures the script waits for each to complete before proceeding.
+Note: `PID1` and `PID2` store the process IDs of the background tasks (`boltz-pre-pulling-job.yaml` and `boltz-cache-download-job.yaml`). This allows them to run in parallel and ensures the script waits for each to complete before proceeding.
 
 ---
 
 ## 6. Run predictions
 
-In this section, you will launch multiple GPU-powered Boltz-2 prediction jobs in parallel, each processing a separate batch of input YAMLs from the shared PVC and saving results back to it.
+In this section, you will launch multiple GPU-powered Boltz-2 prediction jobs in parallel, each processing a separate batch of input YAMLs from the shared filesystem and saving results back to it.
 
-The file `scripts/boltz-multi-job.yaml` defines a Kubernetes indexed job `boltz-runner` that runs **16 Boltz prediction tasks** (`yamls_001`–`yamls_016`) on GPUs. Each batch corresponds to one of the `yamls_XXX` directories, and Kubernetes automatically schedules them across the available GPU nodes. For each batch, a separate **pod** is created, which reads the input YAMLs from the PVC `boltz-fs-pvc` and writes the prediction results back to the same PVC.
+The file `scripts/boltz-multi-job.yaml` defines a Kubernetes indexed job `boltz-runner` that runs 16 Boltz prediction tasks (`yamls_001`–`yamls_016`) on GPUs. Each batch corresponds to one of the `yamls_XXX` directories, and Kubernetes automatically schedules them across the available GPU nodes. For each batch, a separate pod is created, which reads the input YAMLs from the PVC `boltz-fs-pvc` and writes the prediction results back to the same PVC.
 
 ```bash
 envsubst '${BOLTZ_IMAGE}' < scripts/boltz-multi-job.yaml | kubectl apply -f -
@@ -386,7 +385,7 @@ kubectl get pods
 
 ## 7. Download results and delete nodes
 
-In this section, you will wait for all Boltz-2 prediction jobs to finish, download the results from the shared PVC to your local machine, and then clean up the cluster by deleting the jobs and GPU nodes.
+In this section, you will wait for all Boltz-2 prediction jobs to finish, download the results from the PVC to your local machine, and then clean up the cluster by deleting the jobs and GPU nodes.
 
 The `scripts/download_results_from_pvc.sh` script:
 
@@ -399,7 +398,7 @@ The `scripts/download_results_from_pvc.sh` script:
 Before downloading the results, the script waits for the indexed Kubernetes job `boltz-runner` to finish all 16 parallel tasks. The following command counts how many pods have completed successfully to confirm the run:
 
 ```bash
-echo "⏳ Waiting for boltz-runner job to complete..."
+echo "Waiting for boltz-runner job to complete..."
 kubectl wait --for=condition=complete job/boltz-runner --timeout=-1s
 completed=$(kubectl get pods -l job-name=boltz-runner --no-headers | grep 'Completed' | wc -l)
 echo "✅ $completed/16 pods completed."
@@ -422,8 +421,7 @@ nebius mk8s node-group delete --id $NB_NODE_GROUP_ID
 
 In this section, you will delete all Nebius and Kubernetes resources created during the tutorial, including the PVC, shared filesystem, cluster, service account, and container registry.
 
-Use the following commands to remove all remaining resources created in this guide.  
-> **Warning:** This will permanently delete the PVC, the shared filesystem, and the Kubernetes cluster. Before deleting resources, make sure all results are downloaded.
+Use the following commands to remove all remaining resources created in this guide. This will permanently delete the PVC, shared filesystem, and Kubernetes cluster. Before deleting resources, make sure all results are downloaded.
 
 ```bash
 kubectl delete pvc boltz-fs-pvc
@@ -432,4 +430,4 @@ nebius mk8s cluster delete --id $NB_CLUSTER_ID
 nebius iam service-account delete --id $NB_SA_ID
 ```
 
-To delete a registry in Nebius, first remove all container images inside it — otherwise deletion will fail. Go to [Nebius Container Registry](https://console.eu.nebius.com/registry). Open the registry you want to delete. Navigate to the Docker container images section and delete all images. Return to the registry view and delete the registry itself.
+To delete a registry, first remove all container images inside it — otherwise deletion will fail. Go to [Nebius Container Registry](https://console.eu.nebius.com/registry), open the registry you want to delete, navigate to the Docker container images section and delete all images. Return to the registry view and delete the registry itself.
