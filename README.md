@@ -9,5 +9,5 @@ Boltz-2 predicts both **3D protein–ligand complex structures** and **binding a
 ## Features
 - Automated setup of a Nebius MK8s cluster with GPU nodes.
 - Shared filesystem (PVC) for storing input and output data.
-- Batch inference with parallel GPU jobs.
+- Inference with parallel GPU jobs.
 - Scripts for uploading input data and downloading results from PVC.
