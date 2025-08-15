@@ -1,20 +1,20 @@
-# Guide: Boltz-2 Inference on Nebius MK8s with GPU and Shared Filesystem
+# Guide: Boltz-2 inference on Managed Service for Kubernetes® cluster with shared filesystem
 
-**Boltz-2** is an open-source biomolecular foundation model for predicting both complex 3D structures and binding affinities. It enables accurate and fast *in silico* screening for drug discovery, matching the accuracy of physics-based free-energy perturbation (FEP) methods while running up to 1000x faster.
+[Boltz-2](https://github.com/jwohlwend/boltz) is an open-source biomolecular foundation model for predicting both complex 3D structures and binding affinities. It enables accurate and fast *in silico* screening for drug discovery, matching the accuracy of physics-based free-energy perturbation (FEP) methods while running up to 1000x faster.
 
-This guide explains how to set up a [Kubernetes](https://kubernetes.io/) cluster with a GPU and a shared filesystem on Nebius, and run **Boltz-2** inference.
+This guide explains how to set up a Managed Service for [Kubernetes](https://kubernetes.io/) cluster and shared filesystem in Nebius AI Cloud, and run Boltz-2 inference.
 
-The typical inference time is about **40–60 seconds per protein–ligand pair**, which means that with parallel execution on multiple GPUs, large batches of predictions can be completed in minutes. For example, with **16 parallel GPU tasks**, you can process around **1,000 pairs per hour**.
+The typical inference time is about 40–60 seconds per protein–ligand pair, which means that with parallel execution on multiple GPUs, large batches of predictions can be completed in hours. For example, with 16 parallel GPU tasks, you can process around 1,000 pairs per hour.
 
 ---
 
 ## 1. Prepare your environment
 
-In this section, you will install and configure all necessary command-line tools to manage Nebius AI Cloud resources and Kubernetes clusters from your local environment.
+In this section, you will install and configure all necessary command-line tools to manage Nebius AI Cloud resources and Kubernetes cluster from your local environment.
 
-### Install the CLIs and tools
+### Install the command line interfaces and tools
 
-In this guide, you will run commands in your terminal to create and manage **Nebius AI Cloud** resources. First, install the required CLIs and tools using the copy-and-paste commands provided in the following steps.
+Install the required command line interfaces (CLIs) and tools using the copy-and-paste commands provided in the following steps:
 
 <details>
 <summary>Ubuntu (x86-64)</summary>
@@ -84,14 +84,14 @@ nebius profile create
 
 These commands will install the following tools:
 
-- **[`kubectl`](https://kubernetes.io/docs/tasks/tools/#kubectl)** — the Kubernetes command-line interface.
-- **[`jq`](https://jqlang.org/download/)** — a lightweight JSON processor, used here to parse JSON output from the Nebius AI Cloud CLI and extract resource IDs for other commands.
-- **[`helm`](https://helm.sh/docs/intro/install/)** — a package manager for Kubernetes that simplifies deployment and management of applications by packaging them into reusable charts.
-- **[Nebius AI Cloud CLI](https://docs.nebius.com/cli/quickstart)** — the command-line interface for managing all Nebius AI Cloud resources.
+- [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl) — the Kubernetes command-line interface.
+- [jq](https://jqlang.org/download/) — a lightweight JSON processor, used here to parse JSON output from the Nebius AI Cloud CLI and extract resource IDs for other commands.
+- [helm](https://helm.sh/docs/intro/install/) — a package manager for Kubernetes that simplifies deployment and management of applications by packaging them into reusable charts.
+- [Nebius AI Cloud CLI](https://docs.nebius.com/cli/quickstart) — the command-line interface for managing all Nebius AI Cloud resources.
 
 The last command, `nebius profile create`, opens the Nebius AI Cloud web console sign-in screen in your browser. Sign in to complete the initialization.
 
-Run the following commands to verify that all required tools are installed correctly:
+Run the following commands to verify that all required CLIs and tools are installed correctly:
 
 ```bash
 kubectl version --client
@@ -102,13 +102,13 @@ nebius version
 
 After that, save your project ID in the CLI configuration:
 
-1. Copy your **Project ID** from the [Project settings](https://console.nebius.com/settings/) page in the web console.
+1. Copy your project ID from the [Project settings](https://console.nebius.com/settings/) page in the web console.
 2. Run the following command, replacing `<PROJECT_ID>` with your actual project ID:
 ```bash
 nebius config set parent-id <PROJECT_ID>
 ```
 
-> **Note:** In the [Project settings](https://console.nebius.com/settings/) page, you can also create new projects. Click the project name in the top navigation bar, select **Create project**, set a name and parameters, and save. Each project will have its own unique **Project ID**.
+Note: In the [Project settings](https://console.nebius.com/settings/) page, you can also create new projects. Click the project name in the top navigation bar, select **Create project**, set a name and parameters, and save. Each project will have its own unique project ID.
 
 ---
 
