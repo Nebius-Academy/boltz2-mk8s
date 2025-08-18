@@ -4,7 +4,27 @@
 
 This guide explains how to set up a Managed Service for a [Kubernetes](https://kubernetes.io/) cluster and a shared filesystem in Nebius AI Cloud, and run Boltz-2 inference.
 
-The typical inference time is about 40–60 seconds per protein–ligand pair, which means that with parallel execution on multiple GPUs, large batches of predictions can be completed in hours. For example, with 16 parallel GPU tasks, you can process around 1,000 pairs per hour.
+**Model size and GPU requirements**
+
+Boltz-2 is a large biomolecular foundation model (with about 1 billion trainable parameters). In addition to the weights, it requires a substantial model cache (ligand libraries, Canonical Components Dictionary data). Running inference requires powerful GPUs with sufficient memory: in this guide, we use NVIDIA L40S GPUs, which provide both large memory capacity and high throughput.
+
+The typical Boltz-2 inference time is about 40–60 seconds per protein–ligand pair, which means that with parallel execution on multiple GPUs, large batches of predictions can be completed in hours. For example, with 16 parallel GPU tasks, you can process around 1,000 pairs per hour. This is why the guide provisions a multi-node GPU cluster rather than a single GPU.
+
+**Cost note**  
+
+GPU nodes incur costs as soon as they are created and running , and charges stop only after you delete the node group. Storage (filesystems, PVCs) and container registries also accumulate charges while they exist. Be sure to delete all resources (see [Clean up](#8-clean-up-optional)) when you are finished, to avoid unnecessary costs.
+
+**Reference** 
+```
+@article{Passaro2025.06.14.659707,
+    title = {Boltz-2: Towards Accurate and Efficient Binding Affinity Prediction},
+    author = {Passaro, Saro and Corso, Gabriele and Wohlwend, Jeremy and Reveiz, Mateo and Thaler, Stephan and Somnath, Vignesh Ram and Getz, Noah and Portnoi, Tally and Roy, Julien and Stark, Hannes and Kwabi-Addo, David and Beaini, Dominique and Jaakkola, Tommi and Barzilay, Regina},
+	title = {Boltz-2: Towards Accurate and Efficient Binding Affinity Prediction},
+    year = {2025},
+    doi = {10.1101/2025.06.14.659707},
+    journal = {bioRxiv}
+}
+```
 
 ---
 
@@ -385,7 +405,7 @@ kubectl get pods
 
 ## 7. Download results and delete nodes
 
-In this section, you will wait for all Boltz-2 prediction jobs to finish, download the results from the PVC to your local machine, and then clean up the cluster by deleting the jobs and GPU nodes.
+In this section, you will wait for all Boltz-2 prediction jobs to finish, download the results from the PVC to your local machine, and then delete the `boltz-runner` job.
 
 The `scripts/download_results_from_pvc.sh` script:
 
@@ -395,7 +415,7 @@ The `scripts/download_results_from_pvc.sh` script:
 4. Extracts it into a local directory.
 5. Deletes the temporary pod.
 
-Before downloading the results, the script waits for the indexed Kubernetes job `boltz-runner` to finish all 16 parallel tasks. The following command counts how many pods have completed successfully to confirm the run:
+Before downloading the results, the script waits for the indexed Kubernetes job `boltz-runner` to finish all 16 parallel tasks. The following command waits until completion and counts how many pods finished successfully:
 
 ```bash
 echo "Waiting for boltz-runner job to complete..."
@@ -407,23 +427,23 @@ chmod +x scripts/download_results_from_pvc.sh
 scripts/download_results_from_pvc.sh
 
 kubectl delete job boltz-runner --cascade=foreground
-export NB_NODE_GROUP_ID=$(nebius mk8s node-group get-by-name \
-  --parent-id $NB_CLUSTER_ID \
-  --name $NODE_GROUP_NAME \
-  --format json | jq -r '.metadata.id')
-helm uninstall csi-mounted-fs-path
-nebius mk8s node-group delete --id $NB_NODE_GROUP_ID
 ```
 
 ---
 
 ## 8. Clean up (optional)
 
-In this section, you will delete all Nebius and Kubernetes resources created during the tutorial, including the PVC, shared filesystem, cluster, service account, and container registry.
+In this section, you will delete all Nebius and Kubernetes resources created during the tutorial, including GPU nodes, PVC, shared filesystem, cluster, service account, and container registry.
 
 Use the following commands to remove all remaining resources created in this guide. This will permanently delete the PVC, shared filesystem, and Kubernetes cluster. Before deleting resources, make sure all results are downloaded.
 
 ```bash
+export NB_NODE_GROUP_ID=$(nebius mk8s node-group get-by-name \
+  --parent-id $NB_CLUSTER_ID \
+  --name $NODE_GROUP_NAME \
+  --format json | jq -r '.metadata.id')
+helm uninstall csi-mounted-fs-path
+nebius mk8s node-group delete --id $NB_NODE_GROUP_ID
 kubectl delete pvc boltz-fs-pvc
 nebius compute filesystem delete --id $NB_FS_ID
 nebius mk8s cluster delete --id $NB_CLUSTER_ID
