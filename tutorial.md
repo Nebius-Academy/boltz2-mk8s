@@ -6,7 +6,7 @@ This guide explains how to set up a Managed Service for a [Kubernetes](https://k
 
 **Model size and GPU requirements**
 
-Boltz-2 is a large biomolecular foundation model (with about 1 billion trainable parameters). In addition to the weights, it requires a substantial model cache (ligand libraries, Canonical Components Dictionary data). Running inference requires powerful GPUs with sufficient memory: in this guide, we use NVIDIA L40S GPUs, which provide both large memory capacity and high throughput.
+Boltz-2 is a large biomolecular foundation model (with about 1 billion trainable parameters). In addition to the weights, it requires a substantial model cache (ligand libraries, Canonical Components Dictionary data). Running inference requires powerful GPUs with sufficient memory: in this guide, we use NVIDIA L40S GPUs with 48 GB of VRAM, which provide both large memory capacity and high throughput. In practice, GPU memory usage is moderate compared to the total card capacity: structure prediction requires about 11 GB and affinity prediction about 7-8 GB. This leaves sufficient headroom on the L40S for batching, parallel jobs, and stable large-scale inference.
 
 The typical Boltz-2 inference time is about 40–60 seconds per protein–ligand pair, which means that with parallel execution on multiple GPUs, large batches of predictions can be completed in hours. For example, with 16 parallel GPU tasks, you can process around 1,000 pairs per hour. This is why the guide provisions a multi-node GPU cluster rather than a single GPU.
 
