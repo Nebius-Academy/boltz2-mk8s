@@ -4,15 +4,21 @@
 
 This guide explains how to set up a Managed Service for a [Kubernetes](https://kubernetes.io/) cluster and a shared filesystem in Nebius AI Cloud, and run Boltz-2 inference.
 
-**Model size and GPU requirements**
+**Resource requirements, scaling and cost**
 
-Boltz-2 is a large biomolecular foundation model (with about 1 billion trainable parameters). In addition to the weights, it requires a substantial model cache (ligand libraries, Canonical Components Dictionary data). Running inference requires powerful GPUs with sufficient memory: in this guide, we use NVIDIA L40S GPUs with 48 GB of VRAM, which provide both large memory capacity and high throughput. In practice, GPU memory usage is moderate compared to the total card capacity: structure prediction requires about 11 GB and affinity prediction about 7-8 GB. This leaves sufficient headroom on the L40S for batching, parallel jobs, and stable large-scale inference.
+Boltz-2 is a large biomolecular foundation model with about 1 billion trainable parameters. In addition to the weights, it requires a substantial model cache (ligand libraries, Canonical Components Dictionary data). Running inference requires powerful GPUs with high memory capacity: in this guide, we use NVIDIA L40S GPUs with 48 GB of VRAM, which provide both sufficient capacity and high throughput. In practice, GPU memory usage is moderate compared to the total card size: structure prediction requires ~11 GB and affinity prediction ~7-8 GB, leaving spare capacity on the L40S for batching, parallel jobs, and stable large-scale runs.
 
-The typical Boltz-2 inference time is about 40–60 seconds per protein–ligand pair, which means that with parallel execution on multiple GPUs, large batches of predictions can be completed in hours. For example, with 16 parallel GPU tasks, you can process around 1,000 pairs per hour. This is why the guide provisions a multi-node GPU cluster rather than a single GPU.
+The typical Boltz-2 inference time is 40-60 seconds per protein–ligand pair. With multiple GPUs, throughput scales almost linearly: for example, 16 parallel tasks yield ~1,000 pairs per hour. This is why the guide provisions a multi-node GPU cluster rather than a single GPU. For small workloads (a few molecules), a single GPU VM is sufficient, and inference can be run directly from Jupyter or the command line. Kubernetes becomes useful at scale — hundreds or thousands of pairs — where parallel execution and shared storage simplify management.
 
-**Cost note**  
+GPU nodes incur costs as soon as they are created and running, and charges stop only after the node group is deleted. Storage (filesystems, PVCs) and container registries also accumulate charges while they exist. Be sure to delete all resources (see [Clean up](#8-clean-up-optional)) when finished to avoid unnecessary costs.
 
-GPU nodes incur costs as soon as they are created and running , and charges stop only after you delete the node group. Storage (filesystems, PVCs) and container registries also accumulate charges while they exist. Be sure to delete all resources (see [Clean up](#8-clean-up-optional)) when you are finished, to avoid unnecessary costs.
+**General note on applicability**
+
+This guide is written for Boltz-2, but the majority of the workflow is actually model-agnostic and can be reused for other machine learning models running on Kubernetes. Steps such as setting up the environment and installing CLI tools, creating a GPU-enabled Kubernetes cluster with a shared filesystem, uploading data to the PVC, pre-pulling container images, launching inference jobs in parallel, collecting results, and cleaning up cloud resources are all universal.
+
+What is specific to Boltz-2 are the details of the Dockerfile and runner image (since they depend on the Boltz-2 codebase and dependencies), the input data (YAML batches and MSA files), the model cache (Canonical Components Dictionary and ligand libraries), and the particular Kubernetes job YAMLs provided in the repository.
+
+For any other model, you would keep the same general structure of the workflow, but adapt these model-specific pieces: the container build, the input and output data format, how weights or caches are downloaded, and the exact resource requirements.
 
 **Reference** 
 ```
