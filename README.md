@@ -4,6 +4,8 @@ This repository contains scripts and Kubernetes manifests for running **[Boltz-2
 
 Boltz-2 predicts both **3D protein–ligand complex structures** and **binding affinities**, enabling fast *in silico* screening for drug discovery.
 
+[**Check the full, step-by-step tutorial here**](https://github.com/Nebius-Academy/boltz2-mk8s/blob/main/tutorial.md)
+
 ---
 
 ## Features
