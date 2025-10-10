@@ -10,7 +10,7 @@ spec:
     spec:
       containers:
       - name: boltz-runner
-        image: ghcr.io/dashabalashova/boltz-runner:latest
+        image: ghcr.io/nebius-academy/boltz2-mk8s:latest
         env:
           - name: JOB_INDEX
             valueFrom:
