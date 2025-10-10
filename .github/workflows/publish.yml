@@ -38,6 +38,6 @@ jobs:
           # github.repository_owner -> org (e.g. Nebius-Academy)
           # github.event.repository.name -> repo (e.g. boltz-runner)
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
+            ghcr.io/nebius-academy/${{ github.event.repository.name }}:latest
           # Для multi-arch (если нужно), раскомментируйте:
           # platforms: linux/amd64,linux/arm64
