@@ -15,6 +15,6 @@ spec:
       - operator: "Exists"   # Run on all nodes, including tainted ones
       containers:
       - name: prepull
-        image: ghcr.io/dashabalashova/boltz-runner:latest
+        image: ghcr.io/nebius-academy/boltz2-mk8s:latest
         command: ["sleep", "infinity"] # Keep running until manually deleted
       restartPolicy: Always
