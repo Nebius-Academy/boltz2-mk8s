@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-git clone https://github.com/dashabalashova/boltz2-mk8s.git
+git clone https://github.com/Nebius-Academy/boltz2-mk8s.git
 cd boltz2-mk8s
 
 # 1. docker build
