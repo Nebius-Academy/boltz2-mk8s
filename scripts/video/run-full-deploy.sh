@@ -48,9 +48,9 @@ else
   exit 1
 fi
 
-# 3. Container Storage Interface PVC & data
+# 3. mount shared filesystem & upload data
 
-# 3.1 install CSI driver
+# 3.1 install Container Storage Interface driver
 
 helm pull oci://cr.eu-north1.nebius.cloud/mk8s/helm/csi-mounted-fs-path --version 0.1.3
 
@@ -59,13 +59,15 @@ helm upgrade csi-mounted-fs-path ./csi-mounted-fs-path-0.1.3.tgz --install \
 
 rm csi-mounted-fs-path-0.1.3.tgz
 
-# 3.2 mounting shared filesystems to pods
+# 3.2 mounting shared filesystem to pods
 
 kubectl apply -f scripts/video/csi-pvc-and-pod.yaml
 
 # 3.3 upload data
 
 kubectl cp ./data/. my-csi-app:/data
+
+kubectl exec -it my-csi-app -- ls -lah /data
 
 kubectl apply -f scripts/video/boltz-cache-populate-job.yaml
 
