@@ -12,13 +12,14 @@ docker build -t boltz-runner -f docker/Dockerfile .
 
 # 2.1 create registry, service account, MK8S cluster and node group
 
-# 2.1 export IDs
+# 2.2 export IDs
 
 export PROJECT_ID=
 export REGION_ID=
 export NB_REGISTRY_ID=
 export CLUSTER_ID=
 export MOUNT_TAG=
+export NB_REGISTRY_PATH=$(echo $NB_REGISTRY_ID | cut -d- -f2)
 
 # 2.3 command line interface (CLI) configuration
 
@@ -29,10 +30,9 @@ nebius iam get-access-token | \
     --username iam \
     --password-stdin
 
-export NB_REGISTRY_PATH=$(echo $NB_REGISTRY_ID | cut -d- -f2)
-
-docker tag boltz-runner cr.$REGION_ID.nebius.cloud/$NB_REGISTRY_PATH/boltz-runner:v1.0.0
-docker push cr.$REGION_ID.nebius.cloud/$NB_REGISTRY_PATH/boltz-runner:v1.0.0
+export BOLTZ_IMAGE=cr.$REGION_ID.nebius.cloud/$NB_REGISTRY_PATH/boltz-runner:v1.0.0
+docker tag boltz-runner $BOLTZ_IMAGE
+docker push $BOLTZ_IMAGE
 
 # 3. Container Storage Interface PVC & data
 
@@ -61,7 +61,6 @@ kubectl exec -it my-csi-app -- ls /data
 
 # 4.1 pull image and cache
 
-export BOLTZ_IMAGE=cr.$REGION_ID.nebius.cloud/$NB_REGISTRY_PATH/boltz-runner:v1.0.0
 envsubst '$BOLTZ_IMAGE' < scripts/video/boltz-pre-pull.yaml | kubectl apply -f -
 
 kubectl apply -f scripts/video/boltz-cache-populate-job.yaml
